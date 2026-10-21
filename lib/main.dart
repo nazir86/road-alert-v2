@@ -145,6 +145,62 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _shareReports() async {
+    if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
+      _message('Configuration Supabase manquante.');
+      return;
+    }
+
+    final client = Supabase.instance.client;
+
+    if (client.auth.currentUser == null) {
+      final connected = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const AuthPage()),
+      );
+
+      if (!mounted || connected != true || client.auth.currentUser == null) {
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {});
+
+    if (kIsWeb) {
+      _message(
+        'Compte connecté. Le partage communautaire sera '
+        'activé après configuration de la synchronisation Web.',
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Envoyer mes signalements'),
+        content: const Text(
+          'Envoyer les signalements en attente vers Supabase ? '
+          'Ils ne seront pas encore publiés sur la carte '
+          'communautaire.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || confirmed != true) return;
+
+    await _sync();
+  }
+
   Future<void> _sync() async {
     if (kIsWeb) {
       _message(
@@ -161,6 +217,19 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    if (Supabase.instance.client.auth.currentUser == null) {
+      final connected = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const AuthPage()),
+      );
+
+      if (!mounted ||
+          connected != true ||
+          Supabase.instance.client.auth.currentUser == null) {
+        return;
+      }
+    }
+
+    if (!mounted) return;
     setState(() => syncing = true);
 
     try {
@@ -268,10 +337,12 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 18),
                 FilledButton.icon(
-                  onPressed: syncing ? null : _sync,
+                  onPressed: syncing ? null : _shareReports,
                   icon: const Icon(Icons.sync_rounded),
                   label: Text(
-                    syncing ? 'Synchronisation...' : 'Synchroniser maintenant',
+                    syncing
+                        ? 'Synchronisation...'
+                        : 'Partager mes signalements',
                   ),
                 ),
               ],
@@ -320,7 +391,7 @@ class _HomePageState extends State<HomePage> {
                   },
                   onSync: () {
                     Navigator.pop(context);
-                    _sync();
+                    _shareReports();
                   },
                   onAccount: () {
                     Navigator.pop(context);
@@ -352,13 +423,6 @@ class _HomePageState extends State<HomePage> {
                 icon: _BadgeIcon(
                   icon: Icons.notifications_none_rounded,
                   count: alertCount,
-                ),
-              ),
-              IconButton(
-                tooltip: user == null ? 'Connexion' : 'Déconnexion',
-                onPressed: _account,
-                icon: Icon(
-                  user == null ? Icons.login_rounded : Icons.logout_rounded,
                 ),
               ),
               const SizedBox(width: 8),
@@ -506,11 +570,11 @@ class _HomePageState extends State<HomePage> {
                               child: _ActionCard(
                                 title: syncing
                                     ? 'Synchronisation...'
-                                    : 'Synchroniser',
+                                    : 'Partager mes signalements',
                                 subtitle: 'Envoyer les données vers Supabase',
                                 icon: Icons.cloud_upload_outlined,
                                 badge: alertCount,
-                                onTap: syncing ? null : _sync,
+                                onTap: syncing ? null : _shareReports,
                               ),
                             ),
                           ],
@@ -1107,7 +1171,7 @@ class _HomeDrawer extends StatelessWidget {
             ),
             _DrawerItem(
               icon: Icons.cloud_upload_outlined,
-              title: 'Synchroniser',
+              title: 'Partager mes signalements',
               badge: alertCount,
               onTap: onSync,
             ),
